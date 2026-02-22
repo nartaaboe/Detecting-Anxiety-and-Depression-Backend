@@ -1,0 +1,13 @@
+.git
+.gitignore
+.idea
+.vscode
+.DS_Store
+
+.env
+.env.*
+
+bin
+tmp
+dist
+

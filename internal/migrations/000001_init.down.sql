@@ -1,0 +1,12 @@
+DROP TABLE IF EXISTS model_settings;
+DROP TABLE IF EXISTS audit_logs;
+DROP TABLE IF EXISTS analysis_results;
+DROP TABLE IF EXISTS analyses;
+DROP TABLE IF EXISTS texts;
+DROP TABLE IF EXISTS user_sessions;
+DROP TABLE IF EXISTS user_roles;
+DROP TABLE IF EXISTS roles;
+DROP TABLE IF EXISTS users;
+
+DROP EXTENSION IF EXISTS pgcrypto;
+

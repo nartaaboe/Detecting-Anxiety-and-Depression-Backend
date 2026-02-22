@@ -1,0 +1,50 @@
+services:
+  api:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: 8080
+      DB_DSN: postgres://postgres:postgres@db:5432/moodinsight?sslmode=disable
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-change-me-access}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-refresh}
+      ACCESS_TTL_MIN: ${ACCESS_TTL_MIN:-15}
+      REFRESH_TTL_DAYS: ${REFRESH_TTL_DAYS:-14}
+      AI_BASE_URL: http://ai:8000
+      AI_TIMEOUT_MS: ${AI_TIMEOUT_MS:-5000}
+      DEFAULT_MODEL_VERSION: ${DEFAULT_MODEL_VERSION:-baseline}
+      DEFAULT_THRESHOLD: ${DEFAULT_THRESHOLD:-0.5}
+      WORKERS_COUNT: ${WORKERS_COUNT:-2}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: moodinsight
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d moodinsight"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  ai:
+    profiles: ["ai"]
+    build:
+      context: ./ai_mock
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+volumes:
+  postgres_data:
