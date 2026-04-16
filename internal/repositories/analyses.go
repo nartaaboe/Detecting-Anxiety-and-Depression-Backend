@@ -171,6 +171,37 @@ func (r *AnalysesRepo) MarkDone(ctx context.Context, id uuid.UUID, now time.Time
 	return nil
 }
 
+func (r *AnalysesRepo) MarkDoneTx(ctx context.Context, tx *sqlx.Tx, id uuid.UUID, now time.Time) error {
+	_, err := tx.ExecContext(ctx, `
+		UPDATE analyses
+		SET status = 'done', finished_at = $2, error_message = NULL
+		WHERE id = $1
+	`, id, now)
+	if err != nil {
+		return fmt.Errorf("mark done: %w", err)
+	}
+	return nil
+}
+
+func (r *AnalysesRepo) MarkDoneForUserTx(ctx context.Context, tx *sqlx.Tx, id, userID uuid.UUID, now time.Time) error {
+	res, err := tx.ExecContext(ctx, `
+		UPDATE analyses
+		SET status = 'done', finished_at = $3, error_message = NULL
+		WHERE id = $1 AND user_id = $2
+	`, id, userID, now)
+	if err != nil {
+		return fmt.Errorf("mark done: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("mark done rows affected: %w", err)
+	}
+	if affected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (r *AnalysesRepo) MarkFailed(ctx context.Context, id uuid.UUID, now time.Time, msg string) error {
 	_, err := r.db.ExecContext(ctx, `
 		UPDATE analyses
@@ -179,6 +210,21 @@ func (r *AnalysesRepo) MarkFailed(ctx context.Context, id uuid.UUID, now time.Ti
 	`, id, now, msg)
 	if err != nil {
 		return fmt.Errorf("mark failed: %w", err)
+	}
+	return nil
+}
+
+func (r *AnalysesRepo) DeleteForUserTx(ctx context.Context, tx *sqlx.Tx, id, userID uuid.UUID) error {
+	res, err := tx.ExecContext(ctx, `DELETE FROM analyses WHERE id = $1 AND user_id = $2`, id, userID)
+	if err != nil {
+		return fmt.Errorf("delete analysis: %w", err)
+	}
+	affected, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("delete analysis rows affected: %w", err)
+	}
+	if affected == 0 {
+		return sql.ErrNoRows
 	}
 	return nil
 }

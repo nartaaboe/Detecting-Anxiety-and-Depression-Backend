@@ -92,15 +92,41 @@ func CORSMiddleware(allowedOrigins []string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			origin := strings.TrimSpace(r.Header.Get("Origin"))
 			if origin != "" {
+				var allowOrigin string
 				if allowAll {
-					w.Header().Set("Access-Control-Allow-Origin", "*")
+					allowOrigin = "*"
 				} else if _, ok := allowed[origin]; ok {
-					w.Header().Set("Access-Control-Allow-Origin", origin)
-					w.Header().Set("Vary", "Origin")
+					allowOrigin = origin
+					w.Header().Add("Vary", "Origin")
 				}
-				w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
-				w.Header().Set("Access-Control-Allow-Headers", "Authorization,Content-Type,X-Request-Id")
-				w.Header().Set("Access-Control-Expose-Headers", "X-Request-Id")
+
+				if allowOrigin != "" {
+					w.Header().Set("Access-Control-Allow-Origin", allowOrigin)
+					// Only allow credentials when origin is explicitly echoed (not "*").
+					if allowOrigin != "*" {
+						w.Header().Set("Access-Control-Allow-Credentials", "true")
+					}
+
+					w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
+
+					// Be flexible in dev: if the browser asks for specific headers in preflight,
+					// allow exactly those (covers e.g. X-Requested-With, custom headers, etc.).
+					if reqHeaders := strings.TrimSpace(r.Header.Get("Access-Control-Request-Headers")); reqHeaders != "" {
+						w.Header().Set("Access-Control-Allow-Headers", reqHeaders)
+						w.Header().Add("Vary", "Access-Control-Request-Headers")
+					} else {
+						w.Header().Set("Access-Control-Allow-Headers", "Authorization,Content-Type,X-Request-Id")
+					}
+
+					w.Header().Set("Access-Control-Expose-Headers", "X-Request-Id")
+					w.Header().Set("Access-Control-Max-Age", "600")
+
+					// Chrome Private Network Access (helps when frontend is https and backend is localhost).
+					if strings.EqualFold(strings.TrimSpace(r.Header.Get("Access-Control-Request-Private-Network")), "true") {
+						w.Header().Set("Access-Control-Allow-Private-Network", "true")
+						w.Header().Add("Vary", "Access-Control-Request-Private-Network")
+					}
+				}
 			}
 
 			if r.Method == http.MethodOptions {

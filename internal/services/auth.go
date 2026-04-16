@@ -231,6 +231,65 @@ func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
 	})
 }
 
+func (s *AuthService) LogoutAll(ctx context.Context, refreshToken string) error {
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		return fmt.Errorf("%w: refresh_token is required", ErrBadRequest)
+	}
+
+	claims, err := s.jwt.ParseRefresh(refreshToken)
+	if err != nil {
+		return fmt.Errorf("%w: invalid refresh token", ErrUnauthorized)
+	}
+
+	userID, err := uuid.Parse(claims.UserID)
+	if err != nil {
+		return fmt.Errorf("%w: invalid refresh token", ErrUnauthorized)
+	}
+
+	return repositories.WithinTx(ctx, s.db, nil, func(tx *sqlx.Tx) error {
+		return s.sessions.RevokeAllForUser(ctx, tx, userID, time.Now().UTC())
+	})
+}
+
+func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error {
+	currentPassword = strings.TrimSpace(currentPassword)
+	newPassword = strings.TrimSpace(newPassword)
+	if currentPassword == "" || newPassword == "" {
+		return fmt.Errorf("%w: current and new password are required", ErrBadRequest)
+	}
+	if len(newPassword) < 8 {
+		return fmt.Errorf("%w: new password must be at least 8 characters", ErrBadRequest)
+	}
+
+	u, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("%w: user not found", ErrNotFound)
+		}
+		return err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(currentPassword)); err != nil {
+		return fmt.Errorf("%w: current password is incorrect", ErrBadRequest)
+	}
+
+	pwHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), 12)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+
+	return repositories.WithinTx(ctx, s.db, nil, func(tx *sqlx.Tx) error {
+		return s.users.UpdatePasswordHash(ctx, tx, userID, string(pwHash))
+	})
+}
+
+func (s *AuthService) DeleteAccount(ctx context.Context, userID uuid.UUID) error {
+	return repositories.WithinTx(ctx, s.db, nil, func(tx *sqlx.Tx) error {
+		return s.users.DeleteTx(ctx, tx, userID)
+	})
+}
+
 func (s *AuthService) Me(ctx context.Context, userID uuid.UUID) (models.User, error) {
 	u, err := s.users.GetByID(ctx, userID)
 	if err != nil {

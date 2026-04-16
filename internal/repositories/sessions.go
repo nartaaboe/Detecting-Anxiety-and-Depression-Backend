@@ -61,3 +61,15 @@ func (r *SessionsRepo) Revoke(ctx context.Context, tx *sqlx.Tx, id uuid.UUID, no
 	}
 	return nil
 }
+
+func (r *SessionsRepo) RevokeAllForUser(ctx context.Context, tx *sqlx.Tx, userID uuid.UUID, now time.Time) error {
+	_, err := tx.ExecContext(ctx, `
+		UPDATE user_sessions
+		SET revoked_at = $2
+		WHERE user_id = $1 AND revoked_at IS NULL
+	`, userID, now)
+	if err != nil {
+		return fmt.Errorf("revoke all sessions: %w", err)
+	}
+	return nil
+}

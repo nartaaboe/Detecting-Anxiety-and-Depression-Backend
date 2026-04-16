@@ -51,6 +51,7 @@ type Analysis struct {
 	ID           uuid.UUID      `db:"id" json:"id"`
 	UserID       uuid.UUID      `db:"user_id" json:"user_id"`
 	TextID       uuid.UUID      `db:"text_id" json:"text_id"`
+	TextContent  string         `db:"text_content" json:"text_content"`
 	Status       AnalysisStatus `db:"status" json:"status"`
 	ModelVersion string         `db:"model_version" json:"model_version"`
 	Threshold    float64        `db:"threshold" json:"threshold"`
@@ -65,6 +66,7 @@ type AnalysisListItem struct {
 	ID           uuid.UUID      `db:"id" json:"id"`
 	UserID       uuid.UUID      `db:"user_id" json:"user_id"`
 	TextID       uuid.UUID      `db:"text_id" json:"text_id"`
+	TextContent  string         `db:"text_content" json:"text_content"`
 	Status       AnalysisStatus `db:"status" json:"status"`
 	ModelVersion string         `db:"model_version" json:"model_version"`
 	Threshold    float64        `db:"threshold" json:"threshold"`

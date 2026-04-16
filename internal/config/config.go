@@ -73,7 +73,7 @@ func Load() (Config, error) {
 
 	c.AIBaseURL = strings.TrimSpace(os.Getenv("AI_BASE_URL"))
 	if c.AIBaseURL == "" {
-		c.AIBaseURL = "http://localhost:8000"
+		c.AIBaseURL = "http://localhost:8081"
 	}
 
 	aiTimeoutMS := mustInt("AI_TIMEOUT_MS", 5000)

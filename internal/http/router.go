@@ -26,7 +26,9 @@ type Handlers struct {
 
 func NewRouter(h Handlers) *mux.Router {
 	r := mux.NewRouter()
-
+	r.PathPrefix("/").Methods(http.MethodOptions).HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
 	r.Use(RecoveryMiddleware(h.Logger))
 	r.Use(RequestIDMiddleware)
 	r.Use(LoggingMiddleware(h.Logger))
@@ -45,17 +47,27 @@ func NewRouter(h Handlers) *mux.Router {
 	r.HandleFunc("/auth/login", h.handleLogin()).Methods("POST")
 	r.HandleFunc("/auth/refresh", h.handleRefresh()).Methods("POST")
 	r.HandleFunc("/auth/logout", h.handleLogout()).Methods("POST")
+	r.HandleFunc("/auth/logout-all", h.handleLogoutAll()).Methods("POST")
 
 	protected := r.NewRoute().Subrouter()
 	protected.Use(AuthRequired(h.JWT))
 
 	protected.HandleFunc("/auth/me", h.handleMe()).Methods("GET")
+	protected.HandleFunc("/users/me", h.handleMe()).Methods("GET")
+	protected.HandleFunc("/users/me/password", h.handleChangePassword()).Methods("PATCH")
+	protected.HandleFunc("/users/me", h.handleDeleteMe()).Methods("DELETE")
 
 	protected.HandleFunc("/texts", h.handleCreateText()).Methods("POST")
+	protected.HandleFunc("/texts", h.handleListTexts()).Methods("GET")
+	protected.HandleFunc("/texts/{id}", h.handleGetText()).Methods("GET")
+	protected.HandleFunc("/texts/{id}", h.handleUpdateText()).Methods("PATCH")
+	protected.HandleFunc("/texts/{id}", h.handleDeleteText()).Methods("DELETE")
 
 	protected.HandleFunc("/analyses", h.handleCreateAnalysis()).Methods("POST")
 	protected.HandleFunc("/analyses", h.handleListAnalyses()).Methods("GET")
 	protected.HandleFunc("/analyses/{id}", h.handleGetAnalysis()).Methods("GET")
+	protected.HandleFunc("/analyses/{id}", h.handleUpdateAnalysis()).Methods("PATCH")
+	protected.HandleFunc("/analyses/{id}", h.handleDeleteAnalysis()).Methods("DELETE")
 	protected.HandleFunc("/analyses/{id}/result", h.handleGetAnalysisResult()).Methods("GET")
 
 	protected.HandleFunc("/dashboard/summary", h.handleDashboardSummary()).Methods("GET")

@@ -29,6 +29,22 @@ func (r *UsersRepo) Create(ctx context.Context, tx *sqlx.Tx, email, passwordHash
 	return u, nil
 }
 
+func (r *UsersRepo) UpdatePasswordHash(ctx context.Context, tx *sqlx.Tx, id uuid.UUID, passwordHash string) error {
+	_, err := tx.ExecContext(ctx, `UPDATE users SET password_hash = $2 WHERE id = $1`, id, passwordHash)
+	if err != nil {
+		return fmt.Errorf("update password hash: %w", err)
+	}
+	return nil
+}
+
+func (r *UsersRepo) DeleteTx(ctx context.Context, tx *sqlx.Tx, id uuid.UUID) error {
+	_, err := tx.ExecContext(ctx, `DELETE FROM users WHERE id = $1`, id)
+	if err != nil {
+		return fmt.Errorf("delete user: %w", err)
+	}
+	return nil
+}
+
 func (r *UsersRepo) GetByEmail(ctx context.Context, email string) (models.User, error) {
 	var u models.User
 	if err := r.db.GetContext(ctx, &u, `

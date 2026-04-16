@@ -94,10 +94,11 @@ func main() {
 		Logger:    logger,
 		Config:    cfg,
 	})
+	handler := httpapi.CORSMiddleware(cfg.CORSOrigins)(router)
 
 	srv := &http.Server{
 		Addr:              fmt.Sprintf(":%d", cfg.Port),
-		Handler:           router,
+		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,

@@ -1,6 +1,11 @@
 ## MoodInsight Backend (Go)
 
-Production-like REST API для SaaS “MoodInsight”: пользователь отправляет текст → сохраняем в Postgres → запускаем AI-анализ через Python inference service (HTTP) → сохраняем результат → отдаём историю и дашборды. Есть JWT auth (access+refresh), RBAC (user/admin), аудит админ-действий, миграции (embedded через `go:embed`), worker pool.
+Production-like REST API для SaaS “MoodInsight”: сохраняем тексты и результаты анализов в Postgres, отдаём историю и дашборды. Есть JWT auth (access+refresh), RBAC (user/admin), аудит админ-действий, миграции (embedded через `go:embed`), worker pool.
+
+AI-инференс можно делать двумя способами:
+
+1) **Классический**: Go backend создаёт `analysis` (queued) → worker вызывает Python inference service (HTTP) → сохраняем `analysis_results`.
+2) **Через внешний анализатор**: frontend вызывает FastAPI микросервис (см. `../Detecting-Anxiety-and-Depression-AI`) → получает `{label,score,confidence,explanation}` → отправляет это в Go backend, и backend сохраняет результат в БД (без worker).
 
 ### Стек
 
@@ -85,7 +90,7 @@ curl -sS -X POST "http://localhost:8080/auth/login" \
 ```bash
 ACCESS_TOKEN="$(curl -sS -X POST "http://localhost:8080/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"password123"}' | jq -r '.data.tokens.access_token')"
+  -d '{"email":"user@example.com","password":"password123"}' | jq -r '.data.accessToken')"
 ```
 
 Создать текст:
@@ -113,6 +118,26 @@ curl -sS -X POST "http://localhost:8080/analyses" \
   -H "Authorization: Bearer ${ACCESS_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{"content":"Sometimes I feel down and unmotivated.","model_version":"baseline","threshold":0.5}'
+```
+
+Создать анализ с **готовым результатом** (backend сохранит результат в БД и пометит анализ как `done`):
+
+```bash
+curl -sS -X POST "http://localhost:8080/analyses" \
+  -H "Authorization: Bearer ${ACCESS_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content":"Sometimes I feel down and unmotivated.",
+    "result":{
+      "label":"medium",
+      "score":0.72,
+      "confidence":0.91,
+      "explanation":{
+        "key_phrases":["Sometimes","I","feel","down"],
+        "top_sentences":["Sometimes I feel down and unmotivated"]
+      }
+    }
+  }'
 ```
 
 Список анализов (пагинация `limit/offset`, фильтры `status/label/from/to`):
