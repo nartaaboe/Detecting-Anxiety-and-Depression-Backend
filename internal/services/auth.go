@@ -24,15 +24,17 @@ type AuthService struct {
 	users    *repositories.UsersRepo
 	roles    *repositories.RolesRepo
 	sessions *repositories.SessionsRepo
+	audit    *repositories.AuditRepo
 	jwt      *JWTManager
 }
 
-func NewAuthService(db *sqlx.DB, users *repositories.UsersRepo, roles *repositories.RolesRepo, sessions *repositories.SessionsRepo, jwt *JWTManager) *AuthService {
+func NewAuthService(db *sqlx.DB, users *repositories.UsersRepo, roles *repositories.RolesRepo, sessions *repositories.SessionsRepo, audit *repositories.AuditRepo, jwt *JWTManager) *AuthService {
 	return &AuthService{
 		db:       db,
 		users:    users,
 		roles:    roles,
 		sessions: sessions,
+		audit:    audit,
 		jwt:      jwt,
 	}
 }
@@ -86,7 +88,7 @@ func (s *AuthService) Register(ctx context.Context, email, password string) (mod
 	return outUser, tokens, nil
 }
 
-func (s *AuthService) Login(ctx context.Context, email, password string) (models.User, TokenPair, error) {
+func (s *AuthService) Login(ctx context.Context, email, password, ip string) (models.User, TokenPair, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	password = strings.TrimSpace(password)
 	if email == "" || password == "" {
@@ -121,6 +123,7 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (models
 			return err
 		}
 		tokens = pair
+		_ = s.audit.Create(ctx, tx, &u.ID, "user_login", "user", u.ID, nil, ip)
 		return nil
 	})
 	if err != nil {
@@ -204,7 +207,7 @@ func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (TokenPa
 	return out, nil
 }
 
-func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
+func (s *AuthService) Logout(ctx context.Context, refreshToken, ip string) error {
 	refreshToken = strings.TrimSpace(refreshToken)
 	if refreshToken == "" {
 		return fmt.Errorf("%w: refresh_token is required", ErrBadRequest)
@@ -220,12 +223,17 @@ func (s *AuthService) Logout(ctx context.Context, refreshToken string) error {
 		return fmt.Errorf("%w: invalid refresh token", ErrUnauthorized)
 	}
 
+	userID, _ := uuid.Parse(claims.UserID)
+
 	return repositories.WithinTx(ctx, s.db, nil, func(tx *sqlx.Tx) error {
 		if err := s.sessions.Revoke(ctx, tx, sessionID, time.Now().UTC()); err != nil {
 			if err == sql.ErrNoRows {
 				return nil
 			}
 			return err
+		}
+		if userID != uuid.Nil {
+			_ = s.audit.Create(ctx, tx, &userID, "user_logout", "user", userID, nil, ip)
 		}
 		return nil
 	})

@@ -134,13 +134,13 @@ func (s *AdminService) CreateUser(ctx context.Context, actorUserID uuid.UUID, ac
 	return created, nil
 }
 
-func (s *AdminService) SetUserRole(ctx context.Context, actorUserID uuid.UUID, actorIP string, userID uuid.UUID, role string) error {
+func (s *AdminService) SetUserRole(ctx context.Context, actorUserID uuid.UUID, actorIP string, userID uuid.UUID, role string) (models.User, error) {
 	role = strings.TrimSpace(role)
 	if role != "user" && role != "admin" {
-		return fmt.Errorf("%w: role must be 'user' or 'admin'", ErrBadRequest)
+		return models.User{}, fmt.Errorf("%w: role must be 'user' or 'admin'", ErrBadRequest)
 	}
 
-	return repositories.WithinTx(ctx, s.db, nil, func(tx *sqlx.Tx) error {
+	err := repositories.WithinTx(ctx, s.db, nil, func(tx *sqlx.Tx) error {
 		var exists bool
 		if err := tx.GetContext(ctx, &exists, `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)`, userID); err != nil {
 			return err
@@ -159,6 +159,20 @@ func (s *AdminService) SetUserRole(ctx context.Context, actorUserID uuid.UUID, a
 		meta, _ := json.Marshal(map[string]any{"role": role})
 		return s.audit.Create(ctx, tx, &actorUserID, "admin_set_user_role", "user", userID, meta, actorIP)
 	})
+	if err != nil {
+		return models.User{}, err
+	}
+
+	u, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return models.User{}, err
+	}
+	roles, err := s.roles.GetUserRoles(ctx, u.ID)
+	if err != nil {
+		return models.User{}, err
+	}
+	u.Roles = roles
+	return u, nil
 }
 
 func (s *AdminService) SetUserStatus(ctx context.Context, actorUserID uuid.UUID, actorIP string, userID uuid.UUID, isActive bool) error {

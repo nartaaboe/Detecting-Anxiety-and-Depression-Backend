@@ -67,7 +67,7 @@ func main() {
 
 	// Core services
 	jwtm := services.NewJWTManager(cfg.JWTAccessSecret, cfg.JWTRefreshSecret, cfg.AccessTTL, cfg.RefreshTTL)
-	authSvc := services.NewAuthService(db, usersRepo, rolesRepo, sessionsRepo, jwtm)
+	authSvc := services.NewAuthService(db, usersRepo, rolesRepo, sessionsRepo, auditRepo, jwtm)
 	textSvc := services.NewTextService(db, textsRepo)
 
 	aiClient := ai.NewClient(cfg.AIBaseURL, cfg.AITimeout)

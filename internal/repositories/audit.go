@@ -40,9 +40,11 @@ func (r *AuditRepo) List(ctx context.Context, limit, offset int) ([]models.Audit
 
 	var logs []models.AuditLog
 	if err := r.db.SelectContext(ctx, &logs, `
-		SELECT id, actor_user_id, action, entity_type, entity_id, meta_json, created_at, ip
-		FROM audit_logs
-		ORDER BY created_at DESC
+		SELECT al.id, al.actor_user_id, u.email AS actor_email,
+		       al.action, al.entity_type, al.entity_id, al.meta_json, al.created_at, al.ip
+		FROM audit_logs al
+		LEFT JOIN users u ON u.id = al.actor_user_id
+		ORDER BY al.created_at DESC
 		LIMIT $1 OFFSET $2
 	`, limit, offset); err != nil {
 		return nil, 0, fmt.Errorf("list audit logs: %w", err)

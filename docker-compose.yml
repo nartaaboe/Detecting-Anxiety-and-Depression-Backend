@@ -13,7 +13,7 @@ services:
       REFRESH_TTL_DAYS: ${REFRESH_TTL_DAYS:-14}
       AI_BASE_URL: http://ai:8081
       AI_TIMEOUT_MS: ${AI_TIMEOUT_MS:-5000}
-      DEFAULT_MODEL_VERSION: ${DEFAULT_MODEL_VERSION:-baseline}
+      DEFAULT_MODEL_VERSION: ${DEFAULT_MODEL_VERSION:-sentiment_mental_health_model}
       DEFAULT_THRESHOLD: ${DEFAULT_THRESHOLD:-0.5}
       WORKERS_COUNT: ${WORKERS_COUNT:-2}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://[::1]:5173,http://localhost:3000}

@@ -100,7 +100,7 @@ func (h Handlers) handleLogin() http.HandlerFunc {
 			return
 		}
 
-		u, tokens, err := h.Auth.Login(r.Context(), body.Email, body.Password)
+		u, tokens, err := h.Auth.Login(r.Context(), body.Email, body.Password, clientIP(r))
 		if err != nil {
 			writeAppError(w, err)
 			return
@@ -176,7 +176,7 @@ func (h Handlers) handleLogout() http.HandlerFunc {
 			refreshToken = refreshTokenFromCookie(r)
 		}
 		if refreshToken != "" {
-			if err := h.Auth.Logout(r.Context(), refreshToken); err != nil && !errors.Is(err, services.ErrUnauthorized) {
+			if err := h.Auth.Logout(r.Context(), refreshToken, clientIP(r)); err != nil && !errors.Is(err, services.ErrUnauthorized) {
 				writeAppError(w, err)
 				return
 			}
@@ -822,12 +822,13 @@ func (h Handlers) handleAdminSetUserRole() http.HandlerFunc {
 			return
 		}
 
-		if err := h.Admin.SetUserRole(r.Context(), a.UserID, clientIP(r), userID, body.Role); err != nil {
+		updated, err := h.Admin.SetUserRole(r.Context(), a.UserID, clientIP(r), userID, body.Role)
+		if err != nil {
 			writeAppError(w, err)
 			return
 		}
 
-		writeData(w, http.StatusOK, map[string]any{"status": "ok"})
+		writeData(w, http.StatusOK, map[string]any{"user": updated})
 	}
 }
 

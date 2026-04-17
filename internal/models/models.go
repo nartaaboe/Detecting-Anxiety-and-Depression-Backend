@@ -99,6 +99,7 @@ type AnalysisResult struct {
 type AuditLog struct {
 	ID          uuid.UUID       `db:"id" json:"id"`
 	ActorUserID *uuid.UUID      `db:"actor_user_id" json:"actor_user_id,omitempty"`
+	ActorEmail  *string         `db:"actor_email" json:"actor_email,omitempty"`
 	Action      string          `db:"action" json:"action"`
 	EntityType  string          `db:"entity_type" json:"entity_type"`
 	EntityID    uuid.UUID       `db:"entity_id" json:"entity_id"`
