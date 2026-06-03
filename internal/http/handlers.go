@@ -566,18 +566,11 @@ func (h Handlers) handleDeleteText() http.HandlerFunc {
 }
 
 func (h Handlers) handleCreateAnalysis() http.HandlerFunc {
-	type explanation struct {
-		KeyPhrases    []string           `json:"key_phrases"`
-		TopSentences  []string           `json:"top_sentences"`
-		ClassScores   map[string]float64 `json:"class_scores,omitempty"`
-		DominantClass string             `json:"dominant_class,omitempty"`
-		Reason        string             `json:"reason,omitempty"`
-	}
 	type result struct {
-		Label       string      `json:"label"`
-		Score       float64     `json:"score"`
-		Confidence  float64     `json:"confidence"`
-		Explanation explanation `json:"explanation"`
+		Label       string          `json:"label"`
+		Score       float64         `json:"score"`
+		Confidence  float64         `json:"confidence"`
+		Explanation json.RawMessage `json:"explanation"`
 	}
 	type req struct {
 		TextID       string   `json:"text_id"`
@@ -617,10 +610,9 @@ func (h Handlers) handleCreateAnalysis() http.HandlerFunc {
 		}
 
 		if body.Result != nil {
-			explJSON, err := json.Marshal(body.Result.Explanation)
-			if err != nil {
-				writeError(w, http.StatusBadRequest, "validation_error", "invalid result explanation")
-				return
+			explJSON := []byte(body.Result.Explanation)
+			if len(explJSON) == 0 {
+				explJSON = []byte(`{}`)
 			}
 
 			analysis, err := h.Analyses.CreateWithResult(r.Context(), a.UserID, services.CreateAnalysisInput{
@@ -728,18 +720,11 @@ func (h Handlers) handleGetAnalysis() http.HandlerFunc {
 }
 
 func (h Handlers) handleUpdateAnalysis() http.HandlerFunc {
-	type explanation struct {
-		KeyPhrases    []string           `json:"key_phrases"`
-		TopSentences  []string           `json:"top_sentences"`
-		ClassScores   map[string]float64 `json:"class_scores,omitempty"`
-		DominantClass string             `json:"dominant_class,omitempty"`
-		Reason        string             `json:"reason,omitempty"`
-	}
 	type result struct {
-		Label       string      `json:"label"`
-		Score       float64     `json:"score"`
-		Confidence  float64     `json:"confidence"`
-		Explanation explanation `json:"explanation"`
+		Label       string          `json:"label"`
+		Score       float64         `json:"score"`
+		Confidence  float64         `json:"confidence"`
+		Explanation json.RawMessage `json:"explanation"`
 	}
 	type req struct {
 		Result *result `json:"result"`
@@ -769,10 +754,9 @@ func (h Handlers) handleUpdateAnalysis() http.HandlerFunc {
 			return
 		}
 
-		explJSON, err := json.Marshal(body.Result.Explanation)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "validation_error", "invalid result explanation")
-			return
+		explJSON := []byte(body.Result.Explanation)
+		if len(explJSON) == 0 {
+			explJSON = []byte(`{}`)
 		}
 
 		updated, err := h.Analyses.UpsertResult(r.Context(), a.UserID, id, services.CreateAnalysisResultInput{
