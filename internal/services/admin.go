@@ -211,8 +211,8 @@ func (s *AdminService) ListAnalyses(ctx context.Context, f repositories.Analysis
 	return s.analyses.ListAll(ctx, f)
 }
 
-func (s *AdminService) ListAuditLogs(ctx context.Context, limit, offset int) ([]models.AuditLog, int, error) {
-	return s.audit.List(ctx, limit, offset)
+func (s *AdminService) ListAuditLogs(ctx context.Context, action string, limit, offset int) ([]models.AuditLog, int, error) {
+	return s.audit.List(ctx, action, limit, offset)
 }
 
 func (s *AdminService) Stats(ctx context.Context) (AdminStats, error) {

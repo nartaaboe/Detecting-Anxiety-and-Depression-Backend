@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/nartaaboe/Detecting-Anxiety-and-Depression-Backend/internal/ai"
 	"github.com/nartaaboe/Detecting-Anxiety-and-Depression-Backend/internal/repositories"
+	ws "github.com/nartaaboe/Detecting-Anxiety-and-Depression-Backend/internal/ws"
 )
 
 var ErrQueueFull = errors.New("queue is full")
@@ -22,8 +23,11 @@ type Pool struct {
 
 	analyses *repositories.AnalysesRepo
 	results  *repositories.ResultsRepo
+	audit    *repositories.AuditRepo
 	ai       *ai.Client
 	logger   *slog.Logger
+
+	hub *ws.Hub
 
 	wg sync.WaitGroup
 
@@ -31,7 +35,11 @@ type Pool struct {
 	closed bool
 }
 
-func NewPool(workersCount int, queueSize int, analyses *repositories.AnalysesRepo, results *repositories.ResultsRepo, aiClient *ai.Client, logger *slog.Logger) *Pool {
+func (p *Pool) SetHub(h *ws.Hub) {
+	p.hub = h
+}
+
+func NewPool(workersCount int, queueSize int, analyses *repositories.AnalysesRepo, results *repositories.ResultsRepo, audit *repositories.AuditRepo, aiClient *ai.Client, logger *slog.Logger) *Pool {
 	if queueSize <= 0 {
 		queueSize = 1024
 	}
@@ -43,6 +51,7 @@ func NewPool(workersCount int, queueSize int, analyses *repositories.AnalysesRep
 		jobs:     make(chan uuid.UUID, queueSize),
 		analyses: analyses,
 		results:  results,
+		audit:    audit,
 		ai:       aiClient,
 		logger:   logger,
 	}
@@ -183,6 +192,35 @@ func (p *Pool) process(ctx context.Context, logger *slog.Logger, analysisID uuid
 			logger.Error("mark done failed", slog.String("analysis_id", analysisID.String()), slog.Any("err", err))
 		}
 		return
+	}
+
+	if aiResp.Label == "high" {
+		meta, _ := json.Marshal(map[string]any{
+			"label":         aiResp.Label,
+			"score":         aiResp.Score,
+			"confidence":    aiResp.Confidence,
+			"model_version": analysis.ModelVersion,
+		})
+		userID := analysis.UserID
+		if err := p.audit.CreateNoTx(ctx, &userID, "high_risk_detected", "analysis", analysisID, meta, ""); err != nil {
+			if logger != nil {
+				logger.Error("audit log failed", slog.String("analysis_id", analysisID.String()), slog.Any("err", err))
+			}
+		}
+
+		if p.hub != nil {
+			msg, _ := json.Marshal(map[string]any{
+				"type":          "high_risk_alert",
+				"analysis_id":   analysisID.String(),
+				"user_id":       analysis.UserID.String(),
+				"label":         aiResp.Label,
+				"score":         aiResp.Score,
+				"confidence":    aiResp.Confidence,
+				"model_version": analysis.ModelVersion,
+				"at":            time.Now().UTC(),
+			})
+			p.hub.Broadcast(msg)
+		}
 	}
 
 	if logger != nil {

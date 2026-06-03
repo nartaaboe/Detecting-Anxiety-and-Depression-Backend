@@ -7,11 +7,18 @@ import (
 	"strings"
 	"time"
 
+	"encoding/base64"
+
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
 	"github.com/nartaaboe/Detecting-Anxiety-and-Depression-Backend/internal/repositories"
 	"github.com/nartaaboe/Detecting-Anxiety-and-Depression-Backend/internal/services"
+	wslib "github.com/nartaaboe/Detecting-Anxiety-and-Depression-Backend/internal/ws"
 )
+
+func encodeBase64(data []byte) string {
+	return base64.StdEncoding.EncodeToString(data)
+}
 
 type authUserDTO struct {
 	ID    string `json:"id"`
@@ -26,10 +33,12 @@ type authSessionDTO struct {
 }
 
 type meUserDTO struct {
-	ID        string `json:"id"`
-	Email     string `json:"email"`
-	Role      string `json:"role"`
-	CreatedAt string `json:"createdAt,omitempty"`
+	ID          string `json:"id"`
+	Email       string `json:"email"`
+	Role        string `json:"role"`
+	DisplayName string `json:"display_name"`
+	Avatar      string `json:"avatar"`
+	CreatedAt   string `json:"createdAt,omitempty"`
 }
 
 func roleFromRoles(roles []string) string {
@@ -234,10 +243,118 @@ func (h Handlers) handleMe() http.HandlerFunc {
 		}
 
 		writeData(w, http.StatusOK, meUserDTO{
-			ID:        u.ID.String(),
-			Email:     u.Email,
-			Role:      roleFromRoles(u.Roles),
-			CreatedAt: u.CreatedAt.UTC().Format(time.RFC3339),
+			ID:          u.ID.String(),
+			Email:       u.Email,
+			Role:        roleFromRoles(u.Roles),
+			DisplayName: u.DisplayName,
+			Avatar:      u.Avatar,
+			CreatedAt:   u.CreatedAt.UTC().Format(time.RFC3339),
+		})
+	}
+}
+
+func (h Handlers) handleUpdateProfile() http.HandlerFunc {
+	type req struct {
+		DisplayName string `json:"display_name"`
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		a, ok := AuthFromContext(r.Context())
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "unauthorized", "missing auth context")
+			return
+		}
+		var body req
+		if err := decodeJSON(r, &body); err != nil {
+			writeError(w, http.StatusBadRequest, "invalid_json", "invalid json body")
+			return
+		}
+		u, err := h.Auth.UpdateProfile(r.Context(), a.UserID, body.DisplayName)
+		if err != nil {
+			writeAppError(w, err)
+			return
+		}
+		writeData(w, http.StatusOK, meUserDTO{
+			ID:          u.ID.String(),
+			Email:       u.Email,
+			Role:        roleFromRoles(u.Roles),
+			DisplayName: u.DisplayName,
+			Avatar:      u.Avatar,
+			CreatedAt:   u.CreatedAt.UTC().Format(time.RFC3339),
+		})
+	}
+}
+
+func (h Handlers) handleUploadAvatar() http.HandlerFunc {
+	const maxSize = 2 << 20 // 2 MB
+	return func(w http.ResponseWriter, r *http.Request) {
+		a, ok := AuthFromContext(r.Context())
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "unauthorized", "missing auth context")
+			return
+		}
+
+		r.Body = http.MaxBytesReader(w, r.Body, maxSize)
+		if err := r.ParseMultipartForm(maxSize); err != nil {
+			writeError(w, http.StatusBadRequest, "validation_error", "file too large (max 2MB)")
+			return
+		}
+
+		file, header, err := r.FormFile("avatar")
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "validation_error", "avatar field required")
+			return
+		}
+		defer file.Close()
+
+		ct := header.Header.Get("Content-Type")
+		if ct != "image/jpeg" && ct != "image/png" && ct != "image/webp" && ct != "image/gif" {
+			writeError(w, http.StatusBadRequest, "validation_error", "only jpeg, png, webp, gif allowed")
+			return
+		}
+
+		data := make([]byte, header.Size)
+		if _, err := file.Read(data); err != nil {
+			writeError(w, http.StatusInternalServerError, "read_error", "failed to read file")
+			return
+		}
+
+		dataURI := "data:" + ct + ";base64," + encodeBase64(data)
+
+		u, err := h.Auth.UpdateAvatar(r.Context(), a.UserID, dataURI)
+		if err != nil {
+			writeAppError(w, err)
+			return
+		}
+		writeData(w, http.StatusOK, meUserDTO{
+			ID:          u.ID.String(),
+			Email:       u.Email,
+			Role:        roleFromRoles(u.Roles),
+			DisplayName: u.DisplayName,
+			Avatar:      u.Avatar,
+			CreatedAt:   u.CreatedAt.UTC().Format(time.RFC3339),
+		})
+	}
+}
+
+func (h Handlers) handleDeleteAvatar() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		a, ok := AuthFromContext(r.Context())
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "unauthorized", "missing auth context")
+			return
+		}
+		u, err := h.Auth.UpdateAvatar(r.Context(), a.UserID, "")
+		if err != nil {
+			writeAppError(w, err)
+			return
+		}
+		writeData(w, http.StatusOK, meUserDTO{
+			ID:          u.ID.String(),
+			Email:       u.Email,
+			Role:        roleFromRoles(u.Roles),
+			DisplayName: u.DisplayName,
+			Avatar:      u.Avatar,
+			CreatedAt:   u.CreatedAt.UTC().Format(time.RFC3339),
 		})
 	}
 }
@@ -450,8 +567,11 @@ func (h Handlers) handleDeleteText() http.HandlerFunc {
 
 func (h Handlers) handleCreateAnalysis() http.HandlerFunc {
 	type explanation struct {
-		KeyPhrases   []string `json:"key_phrases"`
-		TopSentences []string `json:"top_sentences"`
+		KeyPhrases    []string           `json:"key_phrases"`
+		TopSentences  []string           `json:"top_sentences"`
+		ClassScores   map[string]float64 `json:"class_scores,omitempty"`
+		DominantClass string             `json:"dominant_class,omitempty"`
+		Reason        string             `json:"reason,omitempty"`
 	}
 	type result struct {
 		Label       string      `json:"label"`
@@ -563,6 +683,7 @@ func (h Handlers) handleListAnalyses() http.HandlerFunc {
 		items, total, err := h.Analyses.List(r.Context(), a.UserID, repositories.AnalysisListFilter{
 			Status: strings.TrimSpace(q.Get("status")),
 			Label:  strings.TrimSpace(q.Get("label")),
+			Q:      strings.TrimSpace(q.Get("q")),
 			From:   from,
 			To:     to,
 			Limit:  limit,
@@ -608,8 +729,11 @@ func (h Handlers) handleGetAnalysis() http.HandlerFunc {
 
 func (h Handlers) handleUpdateAnalysis() http.HandlerFunc {
 	type explanation struct {
-		KeyPhrases   []string `json:"key_phrases"`
-		TopSentences []string `json:"top_sentences"`
+		KeyPhrases    []string           `json:"key_phrases"`
+		TopSentences  []string           `json:"top_sentences"`
+		ClassScores   map[string]float64 `json:"class_scores,omitempty"`
+		DominantClass string             `json:"dominant_class,omitempty"`
+		Reason        string             `json:"reason,omitempty"`
 	}
 	type result struct {
 		Label       string      `json:"label"`
@@ -711,6 +835,23 @@ func (h Handlers) handleGetAnalysisResult() http.HandlerFunc {
 			return
 		}
 		writeData(w, http.StatusOK, map[string]any{"result": res})
+	}
+}
+
+func (h Handlers) handleUserStats() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		a, ok := AuthFromContext(r.Context())
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "unauthorized", "missing auth context")
+			return
+		}
+
+		stats, err := h.Dashboard.Stats(r.Context(), a.UserID)
+		if err != nil {
+			writeAppError(w, err)
+			return
+		}
+		writeData(w, http.StatusOK, stats)
 	}
 }
 
@@ -935,7 +1076,8 @@ func (h Handlers) handleAdminListAnalyses() http.HandlerFunc {
 func (h Handlers) handleAdminListAuditLogs() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		limit, offset := parseLimitOffset(r)
-		logs, total, err := h.Admin.ListAuditLogs(r.Context(), limit, offset)
+		action := strings.TrimSpace(r.URL.Query().Get("action"))
+		logs, total, err := h.Admin.ListAuditLogs(r.Context(), action, limit, offset)
 		if err != nil {
 			writeAppError(w, err)
 			return
@@ -989,5 +1131,92 @@ func (h Handlers) handleAdminUpdateModelSettings() http.HandlerFunc {
 			return
 		}
 		writeData(w, http.StatusOK, map[string]any{"model_settings": saved})
+	}
+}
+
+func (h Handlers) handleAdminWSNotifications() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token := r.URL.Query().Get("token")
+		if token == "" {
+			writeError(w, http.StatusUnauthorized, "unauthorized", "missing token")
+			return
+		}
+
+		claims, err := h.JWT.ParseAccess(token)
+		if err != nil {
+			writeError(w, http.StatusUnauthorized, "unauthorized", "invalid token")
+			return
+		}
+
+		isAdmin := false
+		for _, role := range claims.Roles {
+			if role == "admin" {
+				isAdmin = true
+				break
+			}
+		}
+		if !isAdmin {
+			writeError(w, http.StatusForbidden, "forbidden", "admin only")
+			return
+		}
+
+		conn, err := upgrader.Upgrade(w, r, nil)
+		if err != nil {
+			return
+		}
+
+		client := wslib.NewClient(h.WSHub, conn)
+		go client.Run()
+	}
+}
+
+func (h Handlers) handleDashboardTrend() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		a, ok := AuthFromContext(r.Context())
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "unauthorized", "missing auth context")
+			return
+		}
+
+		period := r.URL.Query().Get("period")
+		n := parseIntQuery(r, "n", 12)
+
+		points, err := h.Dashboard.TrendPoints(r.Context(), &a.UserID, period, n)
+		if err != nil {
+			writeAppError(w, err)
+			return
+		}
+		writeData(w, http.StatusOK, map[string]any{"points": points})
+	}
+}
+
+func (h Handlers) handleAdminTrend() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		period := r.URL.Query().Get("period")
+		n := parseIntQuery(r, "n", 12)
+
+		points, err := h.Dashboard.TrendPoints(r.Context(), nil, period, n)
+		if err != nil {
+			writeAppError(w, err)
+			return
+		}
+		writeData(w, http.StatusOK, map[string]any{"points": points})
+	}
+}
+
+func (h Handlers) handleExportAnalyses() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		a, ok := AuthFromContext(r.Context())
+		if !ok {
+			writeError(w, http.StatusUnauthorized, "unauthorized", "missing auth context")
+			return
+		}
+
+		data, err := h.Dashboard.ExportData(r.Context(), a.UserID)
+		if err != nil {
+			writeAppError(w, err)
+			return
+		}
+		writeData(w, http.StatusOK, map[string]any{"export": data})
 	}
 }

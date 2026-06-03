@@ -15,6 +15,7 @@ import (
 type AnalysisListFilter struct {
 	Status string
 	Label  string
+	Q      string
 	From   *time.Time
 	To     *time.Time
 	Limit  int
@@ -56,9 +57,18 @@ func (r *AnalysesRepo) GetByID(ctx context.Context, id uuid.UUID) (models.Analys
 func (r *AnalysesRepo) GetByIDForUser(ctx context.Context, id, userID uuid.UUID) (models.Analysis, error) {
 	var a models.Analysis
 	if err := r.db.GetContext(ctx, &a, `
-		SELECT id, user_id, text_id, status, model_version, threshold, created_at, started_at, finished_at, error_message
-		FROM analyses
-		WHERE id = $1 AND user_id = $2
+		SELECT
+			a.id, a.user_id, a.text_id,
+			COALESCE(t.content, '')  AS text_content,
+			a.status, a.model_version, a.threshold,
+			a.created_at, a.started_at, a.finished_at, a.error_message,
+			ar.label      AS result_label,
+			ar.score      AS result_score,
+			ar.confidence AS result_confidence
+		FROM analyses a
+		LEFT JOIN texts t ON t.id = a.text_id
+		LEFT JOIN analysis_results ar ON ar.analysis_id = a.id
+		WHERE a.id = $1 AND a.user_id = $2
 	`, id, userID); err != nil {
 		return models.Analysis{}, err
 	}
@@ -261,6 +271,13 @@ func buildAnalysisWhere(requireUser bool, userID uuid.UUID, f AnalysisListFilter
 	if f.Label != "" {
 		conds = append(conds, fmt.Sprintf("ar.label = $%d", argN))
 		args = append(args, f.Label)
+		argN++
+	}
+	if f.Q != "" {
+		conds = append(conds, fmt.Sprintf(
+			"EXISTS (SELECT 1 FROM texts t WHERE t.id = a.text_id AND t.content ILIKE $%d)", argN,
+		))
+		args = append(args, "%"+strings.ReplaceAll(f.Q, "%", "\\%")+"%")
 		argN++
 	}
 	if f.From != nil {

@@ -25,8 +25,11 @@ type InferRequest struct {
 }
 
 type Explanation struct {
-	KeyPhrases   []string `json:"key_phrases"`
-	TopSentences []string `json:"top_sentences"`
+	KeyPhrases    []string           `json:"key_phrases"`
+	TopSentences  []string           `json:"top_sentences"`
+	ClassScores   map[string]float64 `json:"class_scores,omitempty"`
+	DominantClass string             `json:"dominant_class,omitempty"`
+	Reason        string             `json:"reason,omitempty"`
 }
 
 type InferResponse struct {

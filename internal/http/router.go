@@ -6,9 +6,15 @@ import (
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/mux"
+	"github.com/gorilla/websocket"
 	"github.com/nartaaboe/Detecting-Anxiety-and-Depression-Backend/internal/config"
 	"github.com/nartaaboe/Detecting-Anxiety-and-Depression-Backend/internal/services"
+	ws "github.com/nartaaboe/Detecting-Anxiety-and-Depression-Backend/internal/ws"
 )
+
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool { return true },
+}
 
 type Handlers struct {
 	Auth      *services.AuthService
@@ -16,6 +22,8 @@ type Handlers struct {
 	Analyses  *services.AnalysisService
 	Dashboard *services.DashboardService
 	Admin     *services.AdminService
+
+	WSHub *ws.Hub
 
 	JWT *services.JWTManager
 
@@ -54,6 +62,9 @@ func NewRouter(h Handlers) *mux.Router {
 
 	protected.HandleFunc("/auth/me", h.handleMe()).Methods("GET")
 	protected.HandleFunc("/users/me", h.handleMe()).Methods("GET")
+	protected.HandleFunc("/users/me/profile", h.handleUpdateProfile()).Methods("PATCH")
+	protected.HandleFunc("/users/me/avatar", h.handleUploadAvatar()).Methods("POST")
+	protected.HandleFunc("/users/me/avatar", h.handleDeleteAvatar()).Methods("DELETE")
 	protected.HandleFunc("/users/me/password", h.handleChangePassword()).Methods("PATCH")
 	protected.HandleFunc("/users/me", h.handleDeleteMe()).Methods("DELETE")
 
@@ -63,6 +74,7 @@ func NewRouter(h Handlers) *mux.Router {
 	protected.HandleFunc("/texts/{id}", h.handleUpdateText()).Methods("PATCH")
 	protected.HandleFunc("/texts/{id}", h.handleDeleteText()).Methods("DELETE")
 
+	protected.HandleFunc("/analyses/export", h.handleExportAnalyses()).Methods("GET")
 	protected.HandleFunc("/analyses", h.handleCreateAnalysis()).Methods("POST")
 	protected.HandleFunc("/analyses", h.handleListAnalyses()).Methods("GET")
 	protected.HandleFunc("/analyses/{id}", h.handleGetAnalysis()).Methods("GET")
@@ -71,6 +83,8 @@ func NewRouter(h Handlers) *mux.Router {
 	protected.HandleFunc("/analyses/{id}/result", h.handleGetAnalysisResult()).Methods("GET")
 
 	protected.HandleFunc("/dashboard/summary", h.handleDashboardSummary()).Methods("GET")
+	protected.HandleFunc("/dashboard/trend", h.handleDashboardTrend()).Methods("GET")
+	protected.HandleFunc("/stats", h.handleUserStats()).Methods("GET")
 
 	admin := r.PathPrefix("/admin").Subrouter()
 	admin.Use(AuthRequired(h.JWT))
@@ -86,6 +100,10 @@ func NewRouter(h Handlers) *mux.Router {
 	admin.HandleFunc("/audit-logs", h.handleAdminListAuditLogs()).Methods("GET")
 	admin.HandleFunc("/stats", h.handleAdminStats()).Methods("GET")
 	admin.HandleFunc("/model-settings", h.handleAdminUpdateModelSettings()).Methods("PATCH")
+	admin.HandleFunc("/trend", h.handleAdminTrend()).Methods("GET")
+
+	// WebSocket — JWT via query param ?token=
+	r.HandleFunc("/ws/admin/notifications", h.handleAdminWSNotifications())
 
 	return r
 }

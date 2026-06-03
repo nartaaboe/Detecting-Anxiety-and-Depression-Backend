@@ -48,7 +48,7 @@ func (r *UsersRepo) DeleteTx(ctx context.Context, tx *sqlx.Tx, id uuid.UUID) err
 func (r *UsersRepo) GetByEmail(ctx context.Context, email string) (models.User, error) {
 	var u models.User
 	if err := r.db.GetContext(ctx, &u, `
-		SELECT id, email, password_hash, is_active, created_at
+		SELECT id, email, password_hash, is_active, display_name, avatar, created_at
 		FROM users
 		WHERE email = $1
 	`, email); err != nil {
@@ -60,7 +60,7 @@ func (r *UsersRepo) GetByEmail(ctx context.Context, email string) (models.User, 
 func (r *UsersRepo) GetByID(ctx context.Context, id uuid.UUID) (models.User, error) {
 	var u models.User
 	if err := r.db.GetContext(ctx, &u, `
-		SELECT id, email, password_hash, is_active, created_at
+		SELECT id, email, password_hash, is_active, display_name, avatar, created_at
 		FROM users
 		WHERE id = $1
 	`, id); err != nil {
@@ -85,6 +85,30 @@ func (r *UsersRepo) List(ctx context.Context, limit, offset int) ([]models.User,
 		return nil, 0, fmt.Errorf("list users: %w", err)
 	}
 	return users, total, nil
+}
+
+func (r *UsersRepo) UpdateProfile(ctx context.Context, id uuid.UUID, displayName string) (models.User, error) {
+	var u models.User
+	if err := r.db.GetContext(ctx, &u, `
+		UPDATE users SET display_name = $2
+		WHERE id = $1
+		RETURNING id, email, password_hash, is_active, display_name, avatar, created_at
+	`, id, displayName); err != nil {
+		return models.User{}, fmt.Errorf("update profile: %w", err)
+	}
+	return u, nil
+}
+
+func (r *UsersRepo) UpdateAvatar(ctx context.Context, id uuid.UUID, avatar string) (models.User, error) {
+	var u models.User
+	if err := r.db.GetContext(ctx, &u, `
+		UPDATE users SET avatar = $2
+		WHERE id = $1
+		RETURNING id, email, password_hash, is_active, display_name, avatar, created_at
+	`, id, avatar); err != nil {
+		return models.User{}, fmt.Errorf("update avatar: %w", err)
+	}
+	return u, nil
 }
 
 func (r *UsersRepo) SetActive(ctx context.Context, id uuid.UUID, isActive bool) error {

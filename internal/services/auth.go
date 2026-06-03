@@ -336,3 +336,25 @@ func (s *AuthService) issueTokens(ctx context.Context, tx *sqlx.Tx, userID uuid.
 		RefreshToken: refresh,
 	}, nil
 }
+
+func (s *AuthService) UpdateProfile(ctx context.Context, userID uuid.UUID, displayName string) (models.User, error) {
+	displayName = strings.TrimSpace(displayName)
+	if len(displayName) > 100 {
+		return models.User{}, ErrBadRequest
+	}
+	u, err := s.users.UpdateProfile(ctx, userID, displayName)
+	if err != nil {
+		return models.User{}, err
+	}
+	u.Roles, _ = s.roles.GetUserRoles(ctx, userID)
+	return u, nil
+}
+
+func (s *AuthService) UpdateAvatar(ctx context.Context, userID uuid.UUID, avatar string) (models.User, error) {
+	u, err := s.users.UpdateAvatar(ctx, userID, avatar)
+	if err != nil {
+		return models.User{}, err
+	}
+	u.Roles, _ = s.roles.GetUserRoles(ctx, userID)
+	return u, nil
+}

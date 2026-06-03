@@ -58,6 +58,18 @@ func parseRFC3339Ptr(v string) (*time.Time, error) {
 	return &t, nil
 }
 
+func parseIntQuery(r *http.Request, key string, defaultVal int) int {
+	v := strings.TrimSpace(r.URL.Query().Get(key))
+	if v == "" {
+		return defaultVal
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return defaultVal
+	}
+	return n
+}
+
 func clientIP(r *http.Request) string {
 	if v := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); v != "" {
 		parts := strings.Split(v, ",")

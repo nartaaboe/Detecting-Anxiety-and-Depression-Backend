@@ -19,6 +19,7 @@ import (
 	"github.com/nartaaboe/Detecting-Anxiety-and-Depression-Backend/internal/repositories"
 	"github.com/nartaaboe/Detecting-Anxiety-and-Depression-Backend/internal/services"
 	"github.com/nartaaboe/Detecting-Anxiety-and-Depression-Backend/internal/workers"
+	ws "github.com/nartaaboe/Detecting-Anxiety-and-Depression-Backend/internal/ws"
 )
 
 func main() {
@@ -72,7 +73,7 @@ func main() {
 
 	aiClient := ai.NewClient(cfg.AIBaseURL, cfg.AITimeout)
 
-	workerPool := workers.NewPool(cfg.WorkersCount, 1024, analysesRepo, resultsRepo, aiClient, logger)
+	workerPool := workers.NewPool(cfg.WorkersCount, 1024, analysesRepo, resultsRepo, auditRepo, aiClient, logger)
 	workersCtx, workersCancel := context.WithCancel(context.Background())
 	defer workersCancel()
 	workerPool.Start(workersCtx, cfg.WorkersCount)
@@ -80,6 +81,10 @@ func main() {
 	analysisSvc := services.NewAnalysisService(db, textsRepo, analysesRepo, resultsRepo, settingsRepo, workerPool)
 	dashboardSvc := services.NewDashboardService(db)
 	adminSvc := services.NewAdminService(db, usersRepo, rolesRepo, auditRepo, settingsRepo, analysesRepo)
+
+	wsHub := ws.NewHub()
+	go wsHub.Run()
+	workerPool.SetHub(wsHub)
 
 	validate := validator.New()
 
@@ -89,6 +94,7 @@ func main() {
 		Analyses:  analysisSvc,
 		Dashboard: dashboardSvc,
 		Admin:     adminSvc,
+		WSHub:     wsHub,
 		JWT:       jwtm,
 		Validate:  validate,
 		Logger:    logger,

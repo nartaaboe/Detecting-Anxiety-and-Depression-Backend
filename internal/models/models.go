@@ -12,6 +12,8 @@ type User struct {
 	Email        string    `db:"email" json:"email"`
 	PasswordHash string    `db:"password_hash" json:"-"`
 	IsActive     bool      `db:"is_active" json:"is_active"`
+	DisplayName  string    `db:"display_name" json:"display_name"`
+	Avatar       string    `db:"avatar" json:"avatar"`
 	CreatedAt    time.Time `db:"created_at" json:"created_at"`
 
 	Roles []string `db:"-" json:"roles,omitempty"`
@@ -60,6 +62,10 @@ type Analysis struct {
 	StartedAt    *time.Time `db:"started_at" json:"started_at,omitempty"`
 	FinishedAt   *time.Time `db:"finished_at" json:"finished_at,omitempty"`
 	ErrorMessage *string    `db:"error_message" json:"error_message,omitempty"`
+
+	ResultLabel      *string  `db:"result_label" json:"result_label,omitempty"`
+	ResultScore      *float64 `db:"result_score" json:"result_score,omitempty"`
+	ResultConfidence *float64 `db:"result_confidence" json:"result_confidence,omitempty"`
 }
 
 type AnalysisListItem struct {

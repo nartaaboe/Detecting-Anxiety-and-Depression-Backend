@@ -67,7 +67,6 @@ func (s *AnalysisService) Create(ctx context.Context, userID uuid.UUID, in Creat
 		modelVersion = settings.DefaultModelVersion
 		threshold = settings.DefaultThreshold
 	} else {
-		// If settings row is missing, fall back to request values (or defaults at handler-level).
 		modelVersion = "baseline"
 		threshold = 0.5
 	}
@@ -236,12 +235,6 @@ func (s *AnalysisService) Get(ctx context.Context, userID, analysisID uuid.UUID)
 		}
 		return models.Analysis{}, err
 	}
-	text, err := s.texts.GetByID(ctx, a.TextID)
-	if err != nil {
-		return models.Analysis{}, err
-	}
-	a.TextContent = text.Content
-
 	return a, nil
 }
 
